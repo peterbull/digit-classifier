@@ -6,6 +6,7 @@
 
 # Training Images
 train
+test
 
 # Packages
 *.egg
