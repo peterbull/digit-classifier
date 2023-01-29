@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['iskaggle', 'creds', 'cred_path', 'path', 'train_full', 'label', 'image_df', 'np_image_array', 'image_tens',
-           'stacked_img_tens', 'stacked_lable_tens', 'folder_path']
+           'stacked_img_tens', 'stacked_lable_tens', 'folder_path', 'dls', 'learn', 'lr_min', 'lr_steep', 'lr_valley']
 
 # %% ../mnist_classifier.ipynb 2
 import os
@@ -70,5 +70,23 @@ for i in range(stacked_img_tens.shape[0]):
     img = stacked_img_tens[i].reshape(28, 28)
     dest = (folder_path/label['label'][i].astype(str))
     dest.mkdir(exist_ok=True)
-    save_image(img, f"{dest}/{i}.png")
+    img_path = Path(f"{dest}/{i}.png")
+    if not img_path.exists():
+        save_image(img, img_path)
 
+# %% ../mnist_classifier.ipynb 21
+dls = ImageDataLoaders.from_folder(folder_path, get_image_files(folder_path), bs=255, valid_pct=0.2, seed=42, label_func=parent_label)
+
+# %% ../mnist_classifier.ipynb 22
+learn = vision_learner(dls, resnet18, loss_func=F.cross_entropy, metrics=accuracy)
+
+# %% ../mnist_classifier.ipynb 24
+lr_min, lr_steep, lr_valley = learn.lr_find(suggest_funcs=(minimum, steep, valley))
+
+# %% ../mnist_classifier.ipynb 25
+lr_min = f"{lr_min:.2e}"
+lr_steep = f"{lr_steep:.2e}"
+lr_valley = f"{lr_valley:.2e}"
+
+# %% ../mnist_classifier.ipynb 26
+learn = vision_learner(dls, resnet18, loss_func=F.cross_entropy, metrics=accuracy)

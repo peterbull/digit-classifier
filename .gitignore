@@ -3,6 +3,10 @@
 # C extensions
 *.so
 
+
+# Training Images
+train
+
 # Packages
 *.egg
 *.egg-info
