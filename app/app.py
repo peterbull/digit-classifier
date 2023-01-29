@@ -4,9 +4,9 @@
 __all__ = ['iskaggle', 'creds', 'cred_path', 'path', 'train_full', 'test_full', 'label', 'test_label', 'image_df',
            'test_image_df', 'np_image_array', 'np_test_array', 'image_tens', 'test_image_tens', 'stacked_img_tens',
            'stacked_test_tens', 'stacked_label_tens', 'stacked_test_label_tens', 'train_path', 'test_path', 'dls',
-           'learn', 'tens_to_img', 'find_lr_metrics']
+           'learn', 'test_image_files', 'test_dl', 'tens_to_img', 'find_lr_metrics']
 
-# %% ../mnist_classifier.ipynb 2
+# %% ../mnist_classifier.ipynb 3
 import os
 from pathlib import Path
 import pandas as pd
@@ -18,87 +18,90 @@ from fastai.callback.all import *
 
 matplotlib.rc('image', cmap='Greys')
 
-# %% ../mnist_classifier.ipynb 3
+# %% ../mnist_classifier.ipynb 4
 iskaggle = os.environ.get('KAGGLE_KERNEL_RUN_TYPE', '')
 creds = ''
 
-# %% ../mnist_classifier.ipynb 4
+# %% ../mnist_classifier.ipynb 5
 cred_path = Path('~/.kaggle/kaggle.json').expanduser()
 if not cred_path.exists():
     cred_path.parent.mkdir(exist_ok=True)
     cred_path.write_text(creds)
     cred_path.chmod(0o600)
 
-# %% ../mnist_classifier.ipynb 5
+# %% ../mnist_classifier.ipynb 6
 path = Path('digit-recognizer')
 
-# %% ../mnist_classifier.ipynb 6
+# %% ../mnist_classifier.ipynb 7
 if not iskaggle and not path.exists():
     import zipfile, kaggle
     kaggle.api.competition_download_cli(str(path))
     zipfile.ZipFile(f'{path}.zip').extractall(path)
 
-# %% ../mnist_classifier.ipynb 7
+# %% ../mnist_classifier.ipynb 8
 if iskaggle:
     path = Path('../input/digit-recognizer')
     ! pip install -q dataset
 
-# %% ../mnist_classifier.ipynb 11
+# %% ../mnist_classifier.ipynb 10
 train_full = pd.read_csv(path/'train.csv')
 test_full = pd.read_csv(path/'test.csv')
 
-# %% ../mnist_classifier.ipynb 12
+# %% ../mnist_classifier.ipynb 11
 label = train_full.iloc[:, :1]
 test_label = test_full.iloc[:, :1]
 
-# %% ../mnist_classifier.ipynb 13
+# %% ../mnist_classifier.ipynb 12
 image_df = train_full.iloc[:, 1:]
 test_image_df = train_full.iloc[:, 1:]
 
-# %% ../mnist_classifier.ipynb 15
+# %% ../mnist_classifier.ipynb 14
 np_image_array = image_df.values
 np_test_array = test_image_df.values
 
-# %% ../mnist_classifier.ipynb 16
+# %% ../mnist_classifier.ipynb 15
 image_tens = [tensor(x).float() for x in np_image_array]
 test_image_tens = [tensor(x).float() for x in np_test_array]
 
-# %% ../mnist_classifier.ipynb 17
+# %% ../mnist_classifier.ipynb 16
 stacked_img_tens = torch.stack(image_tens).float()/255
 stacked_test_tens = torch.stack(test_image_tens).float()/255
 
-# %% ../mnist_classifier.ipynb 18
+# %% ../mnist_classifier.ipynb 17
 stacked_label_tens = tensor(label).unsqueeze(1)
 stacked_test_label_tens = tensor(label).unsqueeze(1)
 
-# %% ../mnist_classifier.ipynb 20
+# %% ../mnist_classifier.ipynb 19
 train_path = Path('train')
 test_path = Path('test')
-def tens_to_img(folder_path, stacked_tensor):
+def tens_to_img(folder_path, stacked_tensor, labeled=True):
     if not folder_path.exists():
         folder_path.mkdir()
     for i in range(stacked_tensor.shape[0]):
         img = stacked_tensor[i].reshape(28, 28)
-        dest = (folder_path/label['label'][i].astype(str))
+        if labeled:
+            dest = (folder_path/label['label'][i].astype(str))
+        else:
+            dest = (folder_path)
         dest.mkdir(exist_ok=True)
         img_path = Path(f"{dest}/{i}.png")
         if not img_path.exists():
             save_image(img, img_path)
 
-# %% ../mnist_classifier.ipynb 21
+# %% ../mnist_classifier.ipynb 20
 tens_to_img(train_path, stacked_img_tens)
-tens_to_img(test_path, stacked_test_tens)
+tens_to_img(test_path, stacked_test_tens, labeled=False)
 
-# %% ../mnist_classifier.ipynb 23
+# %% ../mnist_classifier.ipynb 22
 dls = ImageDataLoaders.from_folder(train_path, get_image_files(train_path), bs=255, valid_pct=0.2, seed=42, label_func=parent_label)
 
-# %% ../mnist_classifier.ipynb 24
+# %% ../mnist_classifier.ipynb 23
 learn = vision_learner(dls, resnet18, loss_func=F.cross_entropy, metrics=accuracy)
 
-# %% ../mnist_classifier.ipynb 25
+# %% ../mnist_classifier.ipynb 24
 learn.fine_tune(3, base_lr=1e-3)
 
-# %% ../mnist_classifier.ipynb 26
+# %% ../mnist_classifier.ipynb 25
 def find_lr_metrics(learn):
     lr_min, lr_steep, lr_valley = learn.lr_find(suggest_funcs=(minimum, steep, valley))
     lr_min = f"{lr_min:.2e}"
@@ -107,18 +110,20 @@ def find_lr_metrics(learn):
     print(f"Minimum: {lr_min}, Steepest Point {lr_steep}, Valley {lr_valley}")
     return lr_min, lr_steep, lr_valley
 
-# %% ../mnist_classifier.ipynb 28
+# %% ../mnist_classifier.ipynb 27
 learn = vision_learner(dls, resnet18, loss_func=F.cross_entropy, metrics=accuracy).to_fp16()
 learn.fit_one_cycle(3, 1e-3)
 
-# %% ../mnist_classifier.ipynb 30
+# %% ../mnist_classifier.ipynb 29
 learn.unfreeze()
 
-# %% ../mnist_classifier.ipynb 32
+# %% ../mnist_classifier.ipynb 31
 learn.fit_one_cycle(5, lr_max=slice(1e-3, 1e-2))
 
-# %% ../mnist_classifier.ipynb 34
+# %% ../mnist_classifier.ipynb 33
 learn.save('model_1')
 
-# %% ../mnist_classifier.ipynb 35
+# %% ../mnist_classifier.ipynb 34
 path = Path('test')
+test_image_files = get_image_files(path)
+test_dl = dls.test_dl(test_image_files)
